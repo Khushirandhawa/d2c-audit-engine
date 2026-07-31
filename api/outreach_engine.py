@@ -1,5 +1,5 @@
 """
-Outreach draft generator for the SB & Co. D2C Meta Ads Audit Engine.
+Outreach draft generator for the Hyper A D2C Meta Ads Audit Engine.
 
 Given one company record (a dict shaped like a row from prospect_source.json
 merged with its live CRM fields), produces:
@@ -18,7 +18,7 @@ business_phone are surfaced as-is, including "Unavailable" where that is
 what the audit data says.
 """
 
-AGENCY_NAME = "SB & Co."
+AGENCY_NAME = "Hyper A"
 
 
 def _first_name(decision_maker_name):
@@ -157,6 +157,7 @@ def generate_outreach(company):
         "company_name": name,
         "decision_maker_name": dm_name,
         "decision_maker_role": role,
+        "decision_maker_linkedin": company.get("decision_maker_linkedin", ""),
         "business_email": company.get("business_email", "Unavailable"),
         "business_phone": company.get("business_phone", "Unavailable"),
         "research_note": company.get("audit_notes", ""),

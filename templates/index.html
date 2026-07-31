@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SB & Co. — D2C Meta Ads Audit Engine</title>
+<title>Hyper A — D2C Meta Ads Audit Engine</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 
 <header class="app-header">
   <div class="app-title">
-    SB &amp; Co. — D2C Meta Ads Audit Engine
+    Hyper A — D2C Meta Ads Audit Engine
     <small>Meta ads &amp; site audit CRM for Indian D2C fashion, apparel, beauty &amp; lifestyle brands</small>
   </div>
   <div class="app-header-actions">
@@ -48,6 +48,7 @@
         <tr>
           <th data-sort="company_name">Company</th>
           <th data-sort="industry">Industry</th>
+          <th>Decision maker</th>
           <th data-sort="meta_ad_count_bucket">Meta Ads</th>
           <th data-sort="creative_freshness_bucket">Creative Freshness</th>
           <th data-sort="discount_depth_bucket">Discount Depth</th>
@@ -252,6 +253,10 @@
         <div class="form-row">
           <label>Decision maker role</label>
           <input type="text" id="edit-decision_maker_role">
+        </div>
+        <div class="form-row">
+          <label>Decision maker LinkedIn</label>
+          <input type="text" id="edit-decision_maker_linkedin">
         </div>
         <div class="form-row">
           <label>Business email</label>

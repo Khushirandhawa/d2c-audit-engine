@@ -1,5 +1,5 @@
 """
-SB & Co. D2C Meta Ads Audit Engine -- Vercel / Postgres version.
+Hyper A D2C Meta Ads Audit Engine -- Vercel / Postgres version.
 
 WSGI entrypoint for Vercel's @vercel/python builder. Connects to Postgres
 via DATABASE_URL (or POSTGRES_URL / POSTGRES_URL_NON_POOLING /
@@ -408,8 +408,9 @@ def api_company_get(company_id):
 
 EDITABLE_FIELDS = [
     "pipeline_stage", "notes", "follow_up_date", "segment",
-    "decision_maker_name", "decision_maker_role", "business_email",
-    "business_phone", "company_name", "industry", "sub_category", "website",
+    "decision_maker_name", "decision_maker_role", "decision_maker_linkedin",
+    "business_email", "business_phone", "company_name", "industry",
+    "sub_category", "website",
 ]
 
 

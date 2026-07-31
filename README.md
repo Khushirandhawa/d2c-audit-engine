@@ -1,4 +1,4 @@
-# SB & Co. D2C Meta Ads Audit Engine — Vercel (Postgres) build
+# Hyper A D2C Meta Ads Audit Engine — Vercel (Postgres) build
 
 Cloud-hosted, Postgres-backed twin of the local SQLite app. Same UI, same
 API, same 200-company dataset (`api/prospect_source.json`) — this build is

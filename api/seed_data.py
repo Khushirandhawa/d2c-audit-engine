@@ -1,5 +1,5 @@
 """
-Static reference data for the SB & Co. D2C Meta Ads Audit Engine (Vercel/Postgres build).
+Static reference data for the Hyper A D2C Meta Ads Audit Engine (Vercel/Postgres build).
 
 This module holds definitions that do NOT come from prospect_source.json:
 the 10 segment definitions (pain point / pitch angle), the 6-category

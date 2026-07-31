@@ -1,4 +1,4 @@
-// SB & Co. D2C Meta Ads Audit Engine -- frontend logic (vanilla JS, no build step)
+// Hyper A D2C Meta Ads Audit Engine -- frontend logic (vanilla JS, no build step)
 
 const state = {
   meta: null,
@@ -186,16 +186,26 @@ document.querySelectorAll("#companies-table th[data-sort]").forEach((th) => {
 function renderTable() {
   const tbody = qs("companies-tbody");
   if (!state.companies.length) {
-    tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state">No companies match these filters.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13"><div class="empty-state">No companies match these filters.</div></td></tr>`;
     return;
   }
   tbody.innerHTML = state.companies.map((c) => {
     const noteIcon = c.audit_notes
       ? `<span class="note-icon" title="${esc(c.audit_notes)}">i</span>` : "";
+    const companyCell = c.website
+      ? `<a href="${esc(c.website)}" target="_blank" rel="noopener"><strong>${esc(c.company_name)}</strong></a><br><a href="${esc(c.website)}" target="_blank" rel="noopener" style="color:#6B7280;font-size:11px;">${esc(c.website)}</a>`
+      : `<strong>${esc(c.company_name)}</strong><br><span style="color:#6B7280;font-size:11px;">${esc(c.sub_category || "")}</span>`;
+    const dmName = c.decision_maker_name && c.decision_maker_name !== "Unavailable" ? esc(c.decision_maker_name) : "Unavailable";
+    const dmRole = c.decision_maker_role ? `<br><span style="color:#6B7280;font-size:11px;">${esc(c.decision_maker_role)}</span>` : "";
+    const dmLinkedin = c.decision_maker_linkedin
+      ? `<br><a href="${esc(c.decision_maker_linkedin)}" target="_blank" rel="noopener" style="font-size:11px;">LinkedIn &#8599;</a>`
+      : "";
+    const dmCell = `${dmName}${dmRole}${dmLinkedin}`;
     return `
     <tr data-id="${c.id}">
-      <td><strong>${esc(c.company_name)}</strong><br><span style="color:#6B7280;font-size:11px;">${esc(c.sub_category || "")}</span></td>
+      <td>${companyCell}</td>
       <td>${esc(c.industry)}</td>
+      <td>${dmCell}</td>
       <td>${tag(c.meta_ad_count_approx || c.meta_ad_count_bucket)}${noteIcon}</td>
       <td>${freshnessTag(c.creative_freshness_bucket)}</td>
       <td>${discountTag(c.discount_depth_bucket)}</td>
@@ -243,6 +253,7 @@ async function openEditModal(id) {
   qs("edit-website").value = c.website || "";
   qs("edit-decision_maker_name").value = c.decision_maker_name || "";
   qs("edit-decision_maker_role").value = c.decision_maker_role || "";
+  qs("edit-decision_maker_linkedin").value = c.decision_maker_linkedin || "";
   qs("edit-business_email").value = c.business_email || "";
   qs("edit-business_phone").value = c.business_phone || "";
   qs("edit-pipeline_stage").value = c.pipeline_stage || "N/A";
@@ -270,6 +281,7 @@ qs("edit-form").addEventListener("submit", async (e) => {
     website: qs("edit-website").value,
     decision_maker_name: qs("edit-decision_maker_name").value,
     decision_maker_role: qs("edit-decision_maker_role").value,
+    decision_maker_linkedin: qs("edit-decision_maker_linkedin").value,
     business_email: qs("edit-business_email").value,
     business_phone: qs("edit-business_phone").value,
     pipeline_stage: qs("edit-pipeline_stage").value,
@@ -315,8 +327,12 @@ async function openOutreachModal(id) {
   const d = await res.json();
   qs("outreach-title").textContent = `Outreach draft — ${d.company_name}`;
   qs("outreach-research-note").textContent = d.research_note || "No research note captured for this company.";
+  const liLink = d.decision_maker_linkedin
+    ? `<a href="${esc(d.decision_maker_linkedin)}" target="_blank" rel="noopener">${esc(d.decision_maker_linkedin)}</a>`
+    : "Unavailable";
   qs("outreach-contact").innerHTML = `
     <strong>${esc(d.decision_maker_name)}</strong> — ${esc(d.decision_maker_role || "Unavailable")}<br>
+    LinkedIn: ${liLink}<br>
     Email: ${esc(d.business_email)}<br>
     Phone: ${esc(d.business_phone)}<br>
     Segment: ${esc(d.segment)}

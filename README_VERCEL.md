@@ -1,4 +1,4 @@
-# SB & Co. D2C Meta Ads Audit Engine — Vercel Deployment Guide
+# Hyper A D2C Meta Ads Audit Engine — Vercel Deployment Guide
 
 This is the cloud-hosted, Postgres-backed version of the Audit Engine. It's
 built for [Vercel](https://vercel.com) and stores its data in a real
