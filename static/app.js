@@ -76,6 +76,7 @@ document.querySelectorAll(".tab-btn").forEach((btn) => {
     document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
     btn.classList.add("active");
     qs("tab-" + btn.dataset.tab).classList.add("active");
+    if (btn.dataset.tab === "table") loadCompanies();
     if (btn.dataset.tab === "pipeline") renderPipeline();
     if (btn.dataset.tab === "segmentation") renderSegmentation();
     if (btn.dataset.tab === "scoring") renderScoring();
