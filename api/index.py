@@ -30,6 +30,7 @@ from flask import Flask, jsonify, request, Response, render_template
 
 from seed_data import (
     PIPELINE_STAGES,
+    STAGE_MIGRATION_MAP,
     SEGMENTS,
     SCORING_FRAMEWORK,
     SCORE_TIERS,
@@ -139,6 +140,18 @@ def ensure_schema_and_seed():
         cur = conn.cursor()
         cur.execute(SCHEMA)
         conn.commit()
+
+        # One-time, idempotent migration: an earlier version of this app used
+        # a longer pipeline stage list. Remap any companies still sitting on
+        # a retired stage value so they show up correctly in the current
+        # (simplified) dropdown instead of an unrecognized value.
+        for old_stage, new_stage in STAGE_MIGRATION_MAP.items():
+            cur.execute(
+                "UPDATE companies SET pipeline_stage = %s WHERE pipeline_stage = %s",
+                (new_stage, old_stage),
+            )
+        conn.commit()
+
         cur.execute("SELECT COUNT(*) AS c FROM companies")
         count = cur.fetchone()["c"]
         if count == 0:
@@ -503,7 +516,7 @@ def api_company_create():
             "score_breakdown": json.dumps(data.get("score_breakdown", {})),
             "opportunity_score": data.get("opportunity_score", 0),
             "score_tier": data.get("score_tier", "D"),
-            "pipeline_stage": data.get("pipeline_stage", "New Lead"),
+            "pipeline_stage": data.get("pipeline_stage", "N/A"),
             "notes": data.get("notes", ""),
             "follow_up_date": data.get("follow_up_date", ""),
         }

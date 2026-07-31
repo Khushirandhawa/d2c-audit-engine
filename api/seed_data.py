@@ -23,16 +23,23 @@ PROSPECT_SOURCE_PATH = os.path.join(BASE_DIR, "prospect_source.json")
 PIPELINE_STAGES = [
     "N/A",
     "New Lead",
-    "Audit Scheduled",
-    "Audit Complete",
     "Ready for Outreach",
     "Contacted",
     "Replied",
     "Meeting Booked",
-    "Proposal Sent",
     "Won",
     "Lost",
 ]
+
+# Maps stage values from an earlier version of this app to the current,
+# simplified stage list -- applied as a one-time, idempotent migration so
+# companies already saved under the old stages don't end up with a value
+# that's no longer a valid option in the dropdown.
+STAGE_MIGRATION_MAP = {
+    "Audit Scheduled": "N/A",
+    "Audit Complete": "N/A",
+    "Proposal Sent": "Meeting Booked",
+}
 
 # ---------------------------------------------------------------------------
 # The 10 segments -- static definitions for display. Live counts are always
@@ -163,7 +170,5 @@ def load_prospects():
 
 
 def initial_pipeline_stage(record):
-    """Seed rule: tie CRM stage to real audit state, not an arbitrary default."""
-    if record.get("audit_completeness") == "Fully audited":
-        return "Audit Complete"
-    return "New Lead"
+    """Every company starts at N/A -- the sales team moves it forward manually."""
+    return "N/A"

@@ -201,6 +201,10 @@ function renderTable() {
       ? `<br><a href="${esc(c.decision_maker_linkedin)}" target="_blank" rel="noopener" style="font-size:11px;">LinkedIn &#8599;</a>`
       : "";
     const dmCell = `${dmName}${dmRole}${dmLinkedin}`;
+    const stageOptions = (state.meta.pipeline_stages || []).map((s) =>
+      `<option value="${esc(s)}" ${s === c.pipeline_stage ? "selected" : ""}>${esc(s)}</option>`
+    ).join("");
+    const stageSelect = `<select class="stage-select" data-id="${c.id}" style="width:100%;">${stageOptions}</select>`;
     return `
     <tr data-id="${c.id}">
       <td>${companyCell}</td>
@@ -214,7 +218,7 @@ function renderTable() {
       <td class="score-cell">${c.opportunity_score}</td>
       <td>${tierBadge(c.score_tier)}</td>
       <td>${esc(c.segment)}</td>
-      <td>${tag(c.pipeline_stage)}</td>
+      <td>${stageSelect}</td>
       <td>
         <div class="row-actions">
           <button class="btn btn-sm" data-action="edit" data-id="${c.id}">Edit</button>
@@ -226,6 +230,27 @@ function renderTable() {
 
   tbody.querySelectorAll('[data-action="edit"]').forEach((b) => b.addEventListener("click", () => openEditModal(b.dataset.id)));
   tbody.querySelectorAll('[data-action="outreach"]').forEach((b) => b.addEventListener("click", () => openOutreachModal(b.dataset.id)));
+  tbody.querySelectorAll(".stage-select").forEach((sel) => {
+    sel.addEventListener("change", async () => {
+      const id = sel.dataset.id;
+      const newStage = sel.value;
+      sel.disabled = true;
+      try {
+        await fetch(`/api/companies/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pipeline_stage: newStage }),
+        });
+        const c = state.companies.find((x) => String(x.id) === String(id));
+        if (c) c.pipeline_stage = newStage;
+        toast("Stage saved");
+      } catch (e) {
+        toast("Couldn't save -- try again");
+      } finally {
+        sel.disabled = false;
+      }
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------
