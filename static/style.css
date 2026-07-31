@@ -199,6 +199,17 @@ table.data-table tbody tr:hover { background: #FAFBFF; }
 
 .row-actions { display: flex; gap: 6px; }
 
+.stage-select {
+  min-width: 170px;
+  width: auto;
+  font-size: 12.5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--grey-border);
+  background: #fff;
+  color: var(--black);
+}
+
 /* ---------- Modal ---------- */
 .modal-backdrop {
   display: none;

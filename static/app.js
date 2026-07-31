@@ -204,7 +204,7 @@ function renderTable() {
     const stageOptions = (state.meta.pipeline_stages || []).map((s) =>
       `<option value="${esc(s)}" ${s === c.pipeline_stage ? "selected" : ""}>${esc(s)}</option>`
     ).join("");
-    const stageSelect = `<select class="stage-select" data-id="${c.id}" style="width:100%;">${stageOptions}</select>`;
+    const stageSelect = `<select class="stage-select" data-id="${c.id}">${stageOptions}</select>`;
     return `
     <tr data-id="${c.id}">
       <td>${companyCell}</td>
