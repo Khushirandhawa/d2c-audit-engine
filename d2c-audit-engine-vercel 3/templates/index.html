@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hyper A — D2C Meta Ads Audit Engine</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="app-title">
+    Hyper A — D2C Meta Ads Audit Engine
+    <small>Meta ads &amp; site audit CRM for Indian D2C fashion, apparel, beauty &amp; lifestyle brands</small>
+  </div>
+  <div class="app-header-actions">
+    <button class="btn" id="btn-export">Export CSV</button>
+    <button class="btn btn-primary" id="btn-add">+ Add Company</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="table">Table</button>
+  <button class="tab-btn" data-tab="pipeline">Pipeline</button>
+  <button class="tab-btn" data-tab="segmentation">Segmentation</button>
+  <button class="tab-btn" data-tab="scoring">Scoring</button>
+  <button class="tab-btn" data-tab="workflow">Workflow</button>
+</nav>
+
+<!-- ===================== TABLE TAB ===================== -->
+<section class="tab-panel active" id="tab-table">
+  <div class="filter-bar">
+    <input type="text" id="f-search" placeholder="Search company, sub-category, decision maker...">
+    <select id="f-industry"><option value="">Industry (all)</option></select>
+    <select id="f-segment"><option value="">Segment (all)</option></select>
+    <select id="f-tier"><option value="">Tier (all)</option></select>
+    <select id="f-stage"><option value="">Pipeline stage (all)</option></select>
+    <select id="f-adbucket"><option value="">Meta ad volume (all)</option></select>
+    <select id="f-discount"><option value="">Discount depth (all)</option></select>
+    <select id="f-audit"><option value="">Audit completeness (all)</option></select>
+    <button class="btn btn-sm" id="btn-clear-filters">Clear filters</button>
+    <span class="result-count" id="result-count"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table class="data-table" id="companies-table">
+      <thead>
+        <tr>
+          <th data-sort="company_name">Company</th>
+          <th data-sort="industry">Industry</th>
+          <th>Decision maker</th>
+          <th data-sort="meta_ad_count_bucket">Meta Ads</th>
+          <th data-sort="creative_freshness_bucket">Creative Freshness</th>
+          <th data-sort="discount_depth_bucket">Discount Depth</th>
+          <th data-sort="conversion_health_bucket">Conversion Health</th>
+          <th data-sort="audit_completeness">Audit</th>
+          <th data-sort="opportunity_score">Score</th>
+          <th data-sort="score_tier">Tier</th>
+          <th data-sort="segment">Segment</th>
+          <th data-sort="pipeline_stage">Stage</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="companies-tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===================== PIPELINE TAB ===================== -->
+<section class="tab-panel" id="tab-pipeline">
+  <div class="section-title">Pipeline — companies by CRM stage</div>
+  <div class="section-sub">Live counts pulled from the database. Click any card to open and edit that company.</div>
+  <div class="pipeline-columns" id="pipeline-columns"></div>
+</section>
+
+<!-- ===================== SEGMENTATION TAB ===================== -->
+<section class="tab-panel" id="tab-segmentation">
+  <div class="section-title">Segmentation — 10 audit-signal segments</div>
+  <div class="section-sub">Each company is assigned exactly one segment based on its audit signals. Counts are live from the database.</div>
+  <div class="grid-cards" id="segmentation-cards"></div>
+</section>
+
+<!-- ===================== SCORING TAB ===================== -->
+<section class="tab-panel" id="tab-scoring">
+  <div class="section-title">Scoring model — 100 points, 6 categories</div>
+  <div class="section-sub">Documents the framework already applied to every company in score_breakdown. Nothing here is recomputed client-side.</div>
+  <table class="scoring-table" id="scoring-framework-table">
+    <thead><tr><th>Category</th><th>Max points</th><th>Rationale</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="section-title" style="margin-top:26px;">Tiers</div>
+  <table class="scoring-table" id="scoring-tiers-table">
+    <thead><tr><th>Tier</th><th>Score range</th><th>Meaning</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="section-title" style="margin-top:26px;">Live tier breakdown</div>
+  <div class="tier-breakdown" id="tier-breakdown"></div>
+</section>
+
+<!-- ===================== WORKFLOW TAB ===================== -->
+<section class="tab-panel" id="tab-workflow">
+<svg viewBox="0 0 800 1160" xmlns="http://www.w3.org/2000/svg" font-family="Arial, Helvetica, sans-serif" style="width:100%;max-width:760px;display:block;margin:0 auto;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4B5563"></path>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="28" text-anchor="middle" font-size="18" font-weight="700" fill="#14161A">Audit-led outreach workflow</text>
+  <text x="400" y="48" text-anchor="middle" font-size="12.5" fill="#6B7280">From a static prospect list to a booked audit call, with two deliberate human checkpoints</text>
+
+  <!-- Legend -->
+  <g font-size="11.5" fill="#14161A">
+    <rect x="150" y="64" width="12" height="12" rx="3" fill="#EAF0FF" stroke="#2F5DFC"></rect>
+    <text x="167" y="74">Automated / app step</text>
+
+    <rect x="330" y="64" width="12" height="12" rx="3" fill="#FFF4E0" stroke="#B4770A"></rect>
+    <text x="347" y="74">Human checkpoint</text>
+
+    <rect x="480" y="64" width="12" height="12" rx="3" fill="#F0F1F3" stroke="#9AA0AC"></rect>
+    <text x="497" y="74">Deprioritized branch</text>
+
+    <rect x="640" y="64" width="12" height="12" rx="3" fill="#E7F6ED" stroke="#1E8A4C"></rect>
+    <text x="657" y="74">CRM outcome</text>
+  </g>
+
+  <!-- Connectors (drawn first, under boxes) -->
+  <g stroke="#4B5563" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+    <path d="M400,176 L400,216"></path>
+    <path d="M400,272 L400,312"></path>
+    <path d="M400,368 L400,408"></path>
+    <path d="M400,464 L400,504"></path>
+    <path d="M400,560 L400,600"></path>
+    <path d="M400,676 L400,716"></path>
+    <path d="M280,766 L195,766 L195,856"></path>
+    <path d="M520,766 L605,766 L605,856"></path>
+    <path d="M195,920 L195,940 L400,940 L400,960"></path>
+    <path d="M605,920 L605,940 L400,940 L400,960"></path>
+    <path d="M400,1016 L400,1040"></path>
+  </g>
+
+  <!-- Branch labels -->
+  <text x="228" y="758" font-size="11.5" fill="#4B5563" font-weight="700">No</text>
+  <text x="555" y="758" font-size="11.5" fill="#4B5563" font-weight="700">Yes</text>
+
+  <!-- Box 1 -->
+  <g>
+    <rect x="230" y="120" width="340" height="56" rx="7" fill="#EAF0FF" stroke="#2F5DFC" stroke-width="1.4"></rect>
+    <text x="400" y="153" text-anchor="middle" font-size="13" fill="#14161A">200-company D2C prospect list</text>
+  </g>
+
+  <!-- Box 2 -->
+  <g>
+    <rect x="200" y="216" width="400" height="56" rx="7" fill="#EAF0FF" stroke="#2F5DFC" stroke-width="1.4"></rect>
+    <text x="400" y="249" text-anchor="middle" font-size="13" fill="#14161A">Meta + website audit signals scored (this app)</text>
+  </g>
+
+  <!-- Box 3 -->
+  <g>
+    <rect x="210" y="312" width="380" height="56" rx="7" fill="#EAF0FF" stroke="#2F5DFC" stroke-width="1.4"></rect>
+    <text x="400" y="345" text-anchor="middle" font-size="13" fill="#14161A">Daily priority queue (Tier A/B first)</text>
+  </g>
+
+  <!-- Box 4 -->
+  <g>
+    <rect x="200" y="408" width="400" height="56" rx="7" fill="#EAF0FF" stroke="#2F5DFC" stroke-width="1.4"></rect>
+    <text x="400" y="441" text-anchor="middle" font-size="13" fill="#14161A">Generate audit-hook outreach draft</text>
+  </g>
+
+  <!-- Box 5: Human checkpoint -->
+  <g>
+    <rect x="240" y="504" width="320" height="56" rx="7" fill="#FFF4E0" stroke="#B4770A" stroke-width="1.6"></rect>
+    <text x="400" y="537" text-anchor="middle" font-size="13" font-weight="700" fill="#6b4e0a">Human reviews &amp; approves</text>
+  </g>
+
+  <!-- Box 6: automated sequence, two lines -->
+  <g>
+    <rect x="150" y="600" width="500" height="76" rx="7" fill="#EAF0FF" stroke="#2F5DFC" stroke-width="1.4"></rect>
+    <text x="400" y="629" text-anchor="middle" font-size="13" fill="#14161A">Automated send sequence</text>
+    <text x="400" y="649" text-anchor="middle" font-size="11.5" fill="#334155">Day 0 LinkedIn → Day 3/7/12 emails, each referencing</text>
+    <text x="400" y="664" text-anchor="middle" font-size="11.5" fill="#334155">the specific audit finding</text>
+  </g>
+
+  <!-- Diamond: decision -->
+  <g>
+    <polygon points="400,716 520,766 400,816 280,766" fill="#FFFFFF" stroke="#2F5DFC" stroke-width="1.6"></polygon>
+    <text x="400" y="761" text-anchor="middle" font-size="12.5" fill="#14161A">Replied or</text>
+    <text x="400" y="777" text-anchor="middle" font-size="12.5" fill="#14161A">connected?</text>
+  </g>
+
+  <!-- Left branch: nurture -->
+  <g>
+    <rect x="70" y="856" width="250" height="64" rx="7" fill="#F0F1F3" stroke="#9AA0AC" stroke-width="1.4"></rect>
+    <text x="195" y="893" text-anchor="middle" font-size="12.5" fill="#4B5563">Move to nurture</text>
+  </g>
+
+  <!-- Right branch: human takes over -->
+  <g>
+    <rect x="480" y="856" width="250" height="64" rx="7" fill="#FFF4E0" stroke="#B4770A" stroke-width="1.6"></rect>
+    <text x="605" y="884" text-anchor="middle" font-size="12" font-weight="700" fill="#6b4e0a">Human takes over —</text>
+    <text x="605" y="900" text-anchor="middle" font-size="12" font-weight="700" fill="#6b4e0a">books the audit call</text>
+  </g>
+
+  <!-- Merge: CRM auto-updates -->
+  <g>
+    <rect x="240" y="960" width="320" height="56" rx="7" fill="#E7F6ED" stroke="#1E8A4C" stroke-width="1.6"></rect>
+    <text x="400" y="985" text-anchor="middle" font-size="13" font-weight="700" fill="#145c34">CRM auto-updates</text>
+    <text x="400" y="1001" text-anchor="middle" font-size="11" fill="#145c34">(pipeline stage progresses automatically)</text>
+  </g>
+
+  <!-- Closing note -->
+  <g>
+    <rect x="130" y="1040" width="540" height="70" rx="7" fill="#FAFBFF" stroke="#DFE2E8" stroke-width="1.2" stroke-dasharray="4 3"></rect>
+    <text x="400" y="1066" text-anchor="middle" font-size="11.5" font-style="italic" fill="#4B5563">Outcomes feed back to refine which signals</text>
+    <text x="400" y="1084" text-anchor="middle" font-size="11.5" font-style="italic" fill="#4B5563">predict a booked call.</text>
+  </g>
+</svg>
+</section>
+
+<!-- ===================== EDIT / ADD MODAL ===================== -->
+<div class="modal-backdrop" id="modal-edit">
+  <div class="modal">
+    <button class="modal-close" data-close-modal>&times;</button>
+    <h2 id="edit-modal-title">Edit company</h2>
+    <form id="edit-form">
+      <input type="hidden" id="edit-id">
+      <div class="form-grid">
+        <div class="form-row">
+          <label>Company name</label>
+          <input type="text" id="edit-company_name" required>
+        </div>
+        <div class="form-row">
+          <label>Industry</label>
+          <select id="edit-industry">
+            <option>Apparel</option><option>Fashion</option><option>Beauty</option><option>Lifestyle</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Sub-category</label>
+          <input type="text" id="edit-sub_category">
+        </div>
+        <div class="form-row">
+          <label>Website</label>
+          <input type="text" id="edit-website">
+        </div>
+        <div class="form-row">
+          <label>Decision maker name</label>
+          <input type="text" id="edit-decision_maker_name">
+        </div>
+        <div class="form-row">
+          <label>Decision maker role</label>
+          <input type="text" id="edit-decision_maker_role">
+        </div>
+        <div class="form-row">
+          <label>Decision maker LinkedIn</label>
+          <input type="text" id="edit-decision_maker_linkedin">
+        </div>
+        <div class="form-row">
+          <label>Business email</label>
+          <input type="text" id="edit-business_email">
+        </div>
+        <div class="form-row">
+          <label>Business phone</label>
+          <input type="text" id="edit-business_phone">
+        </div>
+        <div class="form-row">
+          <label>Pipeline stage</label>
+          <select id="edit-pipeline_stage"></select>
+        </div>
+        <div class="form-row">
+          <label>Segment override</label>
+          <select id="edit-segment"></select>
+        </div>
+        <div class="form-row">
+          <label>Follow-up date</label>
+          <input type="date" id="edit-follow_up_date">
+        </div>
+      </div>
+      <div class="form-row">
+        <label>Notes</label>
+        <textarea id="edit-notes"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-danger" id="btn-delete-company">Delete</button>
+        <button type="button" class="btn" data-close-modal>Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ===================== OUTREACH MODAL ===================== -->
+<div class="modal-backdrop" id="modal-outreach">
+  <div class="modal" style="max-width:680px;">
+    <button class="modal-close" data-close-modal>&times;</button>
+    <h2 id="outreach-title">Outreach draft</h2>
+
+    <div class="outreach-section">
+      <h3>Research note (from audit_notes)</h3>
+      <div class="research-note" id="outreach-research-note"></div>
+    </div>
+
+    <div class="outreach-section">
+      <h3>Contact</h3>
+      <div class="outreach-block" id="outreach-contact"></div>
+    </div>
+
+    <div class="outreach-section">
+      <h3>LinkedIn connection message</h3>
+      <div class="outreach-block" id="outreach-li-connect"><button class="btn btn-sm copy-btn" data-copy-target="outreach-li-connect-text">Copy</button><span id="outreach-li-connect-text"></span></div>
+    </div>
+
+    <div class="outreach-section">
+      <h3>LinkedIn follow-up message</h3>
+      <div class="outreach-block" id="outreach-li-followup"><button class="btn btn-sm copy-btn" data-copy-target="outreach-li-followup-text">Copy</button><span id="outreach-li-followup-text"></span></div>
+    </div>
+
+    <div class="outreach-section">
+      <h3>Cold email — subject line options</h3>
+      <ul class="subject-options" id="outreach-subjects"></ul>
+    </div>
+
+    <div class="outreach-section">
+      <h3>Cold email body</h3>
+      <div class="outreach-block" id="outreach-email"><button class="btn btn-sm copy-btn" data-copy-target="outreach-email-text">Copy</button><span id="outreach-email-text"></span></div>
+    </div>
+
+    <div class="outreach-section">
+      <h3>Follow-up email body</h3>
+      <div class="outreach-block" id="outreach-followup-email"><button class="btn btn-sm copy-btn" data-copy-target="outreach-followup-email-text">Copy</button><span id="outreach-followup-email-text"></span></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
