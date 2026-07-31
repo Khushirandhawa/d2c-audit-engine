@@ -405,21 +405,56 @@ async function renderPipeline() {
   holder.innerHTML = stages.map((stage) => {
     const items = byStage[stage] || [];
     return `
-    <div class="pipeline-col">
+    <div class="pipeline-col" data-stage="${esc(stage)}">
       <h3>${esc(stage)} <span class="pipeline-count">${items.length}</span></h3>
+      <div class="pipeline-col-body" data-stage="${esc(stage)}">
       ${items.map((c) => `
-        <div class="pipeline-card" data-id="${c.id}">
+        <div class="pipeline-card" data-id="${c.id}" draggable="true">
           <div class="pname">${esc(c.company_name)}</div>
           <div class="pmeta">${esc(c.industry)} · Tier ${esc(c.score_tier)} · ${c.opportunity_score} pts</div>
         </div>
-      `).join("") || `<div style="color:#9AA0AC;font-size:12px;padding:6px 2px;">No companies</div>`}
+      `).join("") || `<div class="pipeline-empty" style="color:#9AA0AC;font-size:12px;padding:6px 2px;">No companies</div>`}
+      </div>
     </div>`;
   }).join("");
+
+  let draggedId = null;
 
   holder.querySelectorAll(".pipeline-card").forEach((el) => {
     el.addEventListener("click", () => {
       document.querySelector('.tab-btn[data-tab="table"]').click();
       openEditModal(el.dataset.id);
+    });
+    el.addEventListener("dragstart", () => {
+      draggedId = el.dataset.id;
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend", () => {
+      el.classList.remove("dragging");
+    });
+  });
+
+  holder.querySelectorAll(".pipeline-col-body").forEach((col) => {
+    col.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      col.classList.add("drop-target");
+    });
+    col.addEventListener("dragleave", () => {
+      col.classList.remove("drop-target");
+    });
+    col.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      col.classList.remove("drop-target");
+      if (!draggedId) return;
+      const newStage = col.dataset.stage;
+      await fetch(`/api/companies/${draggedId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pipeline_stage: newStage }),
+      });
+      toast("Stage saved");
+      draggedId = null;
+      renderPipeline();
     });
   });
 }

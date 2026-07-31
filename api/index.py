@@ -30,7 +30,6 @@ from flask import Flask, jsonify, request, Response, render_template
 
 from seed_data import (
     PIPELINE_STAGES,
-    STAGE_MIGRATION_MAP,
     SEGMENTS,
     SCORING_FRAMEWORK,
     SCORE_TIERS,
@@ -139,18 +138,26 @@ def ensure_schema_and_seed():
     try:
         cur = conn.cursor()
         cur.execute(SCHEMA)
+        cur.execute(
+            "CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT)"
+        )
         conn.commit()
 
-        # One-time, idempotent migration: an earlier version of this app used
-        # a longer pipeline stage list. Remap any companies still sitting on
-        # a retired stage value so they show up correctly in the current
-        # (simplified) dropdown instead of an unrecognized value.
-        for old_stage, new_stage in STAGE_MIGRATION_MAP.items():
+        # One-time reset (runs exactly once, guarded by app_meta, then never
+        # again): the pipeline stage list was simplified and every company's
+        # stage is reset to N/A so nobody is stuck on a stage value from an
+        # earlier version of this app. After this runs once, stage changes
+        # made through the app persist normally across deploys/cold starts.
+        cur.execute("SELECT value FROM app_meta WHERE key = %s", ("stage_reset_v1",))
+        already_reset = cur.fetchone()
+        if not already_reset:
+            cur.execute("UPDATE companies SET pipeline_stage = 'N/A'")
             cur.execute(
-                "UPDATE companies SET pipeline_stage = %s WHERE pipeline_stage = %s",
-                (new_stage, old_stage),
+                "INSERT INTO app_meta (key, value) VALUES (%s, %s) "
+                "ON CONFLICT (key) DO NOTHING",
+                ("stage_reset_v1", "done"),
             )
-        conn.commit()
+            conn.commit()
 
         cur.execute("SELECT COUNT(*) AS c FROM companies")
         count = cur.fetchone()["c"]
