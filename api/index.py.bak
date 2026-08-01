@@ -1,5 +1,5 @@
 """
-Hyper A D2C Meta Ads Audit Engine -- Vercel / Postgres version.
+SB & Co. D2C Meta Ads Audit Engine -- Vercel / Postgres version.
 
 WSGI entrypoint for Vercel's @vercel/python builder. Connects to Postgres
 via DATABASE_URL (or POSTGRES_URL / POSTGRES_URL_NON_POOLING /
@@ -63,55 +63,14 @@ def get_database_url():
     return None
 
 
-# Reuse one connection across requests handled by the same warm serverless
-# instance instead of opening a fresh TCP+TLS connection to Postgres on
-# every single request -- this is the single biggest latency win available
-# in a serverless deployment, since connection setup (not the query itself)
-# is usually most of the round-trip time for a small dataset like this one.
-_conn_cache = None
-
-
 def get_conn():
-    global _conn_cache
-    if _conn_cache is not None:
-        try:
-            if _conn_cache.closed == 0:
-                probe = _conn_cache.cursor()
-                probe.execute("SELECT 1")
-                probe.close()
-                return _conn_cache
-        except Exception:
-            try:
-                _conn_cache.close()
-            except Exception:
-                pass
-            _conn_cache = None
-
     url = get_database_url()
     if not url:
         raise RuntimeError(
             "No database connection string found. Set DATABASE_URL (or "
             "POSTGRES_URL / POSTGRES_URL_NON_POOLING / POSTGRES_PRISMA_URL)."
         )
-    _conn_cache = psycopg2.connect(
-        url, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=8
-    )
-    return _conn_cache
-
-
-def release_conn(conn, error=False):
-    """Call at the end of a request instead of conn.close() -- keeps the
-    connection alive for reuse by the next request on a warm instance. On
-    error, rolls back so a failed query doesn't leave the cached connection
-    stuck in an aborted transaction state."""
-    if conn is None:
-        return
-    try:
-        if error:
-            conn.rollback()
-    except Exception:
-        global _conn_cache
-        _conn_cache = None
+    return psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
 
 
 SCHEMA = """
@@ -149,11 +108,6 @@ CREATE TABLE IF NOT EXISTS companies (
     score_breakdown TEXT,
     opportunity_score INTEGER,
     score_tier TEXT,
-    shopify_status TEXT,
-    shopify_evidence TEXT,
-    company_size TEXT,
-    company_size_confidence TEXT,
-    company_size_note TEXT,
     pipeline_stage TEXT DEFAULT 'N/A',
     notes TEXT DEFAULT '',
     follow_up_date TEXT DEFAULT '',
@@ -172,150 +126,19 @@ COLUMNS = [
     "discount_pct_found", "discount_depth_bucket", "conversion_signals_found",
     "conversion_health_bucket", "audit_date", "audit_completeness",
     "audit_notes", "segment", "segment_pain_point", "segment_pitch_angle",
-    "score_breakdown", "opportunity_score", "score_tier",
-    "shopify_status", "shopify_evidence",
-    "company_size", "company_size_confidence", "company_size_note",
-    "pipeline_stage", "notes", "follow_up_date",
+    "score_breakdown", "opportunity_score", "score_tier", "pipeline_stage",
+    "notes", "follow_up_date",
 ]
 
 
-def _record_to_row(rec):
-    """Build the INSERT row dict for one prospect_source.json record."""
-    return {
-        "prospect_id": rec.get("prospect_id"),
-        "company_name": rec.get("company_name"),
-        "industry": rec.get("industry"),
-        "sub_category": rec.get("sub_category"),
-        "website": rec.get("website"),
-        "linkedin_company": rec.get("linkedin_company"),
-        "instagram_lookup": rec.get("instagram_lookup"),
-        "decision_maker_name": rec.get("decision_maker_name"),
-        "decision_maker_role": rec.get("decision_maker_role"),
-        "decision_maker_linkedin": rec.get("decision_maker_linkedin"),
-        "business_email": rec.get("business_email"),
-        "business_phone": rec.get("business_phone"),
-        "contact_confidence": rec.get("contact_confidence"),
-        "contact_data_score": rec.get("contact_data_score"),
-        "meta_ad_count_approx": rec.get("meta_ad_count_approx"),
-        "meta_ad_count_bucket": rec.get("meta_ad_count_bucket"),
-        "meta_data_confidence": rec.get("meta_data_confidence"),
-        "most_recent_ad_start_date": rec.get("most_recent_ad_start_date"),
-        "creative_freshness_bucket": rec.get("creative_freshness_bucket"),
-        "discount_pct_found": rec.get("discount_pct_found"),
-        "discount_depth_bucket": rec.get("discount_depth_bucket"),
-        "conversion_signals_found": json.dumps(rec.get("conversion_signals_found") or []),
-        "conversion_health_bucket": rec.get("conversion_health_bucket"),
-        "audit_date": rec.get("audit_date"),
-        "audit_completeness": rec.get("audit_completeness"),
-        "audit_notes": rec.get("audit_notes"),
-        "segment": rec.get("segment"),
-        "segment_pain_point": rec.get("segment_pain_point"),
-        "segment_pitch_angle": rec.get("segment_pitch_angle"),
-        "score_breakdown": json.dumps(rec.get("score_breakdown") or {}),
-        "opportunity_score": rec.get("opportunity_score"),
-        "score_tier": rec.get("score_tier"),
-        "shopify_status": rec.get("shopify_status"),
-        "shopify_evidence": rec.get("shopify_evidence"),
-        "company_size": rec.get("company_size"),
-        "company_size_confidence": rec.get("company_size_confidence"),
-        "company_size_note": rec.get("company_size_note"),
-        "pipeline_stage": initial_pipeline_stage(rec),
-        "notes": "",
-        "follow_up_date": "",
-    }
-
-
 def ensure_schema_and_seed():
-    """Idempotent: create schema if missing, seed companies if table is empty,
-    and sync in any companies newly added to prospect_source.json since the
-    last deploy (matched by prospect_id) without touching existing rows."""
+    """Idempotent: create schema if missing, seed 200 companies if table is empty."""
     global _initialized
     conn = get_conn()
     try:
         cur = conn.cursor()
         cur.execute(SCHEMA)
-        cur.execute(
-            "CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT)"
-        )
         conn.commit()
-
-        # Migration: add shopify_status / shopify_evidence columns to a DB
-        # that was created before this feature existed, then backfill from
-        # the prospect_source.json dataset by prospect_id (runs once).
-        cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS shopify_status TEXT")
-        cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS shopify_evidence TEXT")
-        cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_size TEXT")
-        cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_size_confidence TEXT")
-        cur.execute("ALTER TABLE companies ADD COLUMN IF NOT EXISTS company_size_note TEXT")
-        conn.commit()
-
-        # Indexes on the columns used for filtering/sorting -- cheap at 200
-        # rows but keeps queries fast as the dataset grows.
-        for idx_col in (
-            "industry", "segment", "score_tier", "pipeline_stage",
-            "meta_ad_count_bucket", "discount_depth_bucket",
-            "audit_completeness", "shopify_status", "company_size",
-            "opportunity_score",
-        ):
-            cur.execute(
-                f"CREATE INDEX IF NOT EXISTS idx_companies_{idx_col} ON companies ({idx_col})"
-            )
-        conn.commit()
-
-        cur.execute("SELECT value FROM app_meta WHERE key = %s", ("shopify_backfill_v1",))
-        already_backfilled = cur.fetchone()
-        if not already_backfilled:
-            prospects_for_backfill = load_prospects()
-            for rec in prospects_for_backfill:
-                cur.execute(
-                    "UPDATE companies SET shopify_status = %s, shopify_evidence = %s WHERE prospect_id = %s",
-                    (rec.get("shopify_status"), rec.get("shopify_evidence"), rec.get("prospect_id")),
-                )
-            cur.execute(
-                "INSERT INTO app_meta (key, value) VALUES (%s, %s) "
-                "ON CONFLICT (key) DO NOTHING",
-                ("shopify_backfill_v1", "done"),
-            )
-            conn.commit()
-
-        cur.execute("SELECT value FROM app_meta WHERE key = %s", ("company_size_backfill_v1",))
-        already_size_backfilled = cur.fetchone()
-        if not already_size_backfilled:
-            prospects_for_size_backfill = load_prospects()
-            for rec in prospects_for_size_backfill:
-                cur.execute(
-                    "UPDATE companies SET company_size = %s, company_size_confidence = %s, "
-                    "company_size_note = %s WHERE prospect_id = %s",
-                    (
-                        rec.get("company_size"),
-                        rec.get("company_size_confidence"),
-                        rec.get("company_size_note"),
-                        rec.get("prospect_id"),
-                    ),
-                )
-            cur.execute(
-                "INSERT INTO app_meta (key, value) VALUES (%s, %s) "
-                "ON CONFLICT (key) DO NOTHING",
-                ("company_size_backfill_v1", "done"),
-            )
-            conn.commit()
-
-        # One-time reset (runs exactly once, guarded by app_meta, then never
-        # again): the pipeline stage list was simplified and every company's
-        # stage is reset to N/A so nobody is stuck on a stage value from an
-        # earlier version of this app. After this runs once, stage changes
-        # made through the app persist normally across deploys/cold starts.
-        cur.execute("SELECT value FROM app_meta WHERE key = %s", ("stage_reset_v1",))
-        already_reset = cur.fetchone()
-        if not already_reset:
-            cur.execute("UPDATE companies SET pipeline_stage = 'N/A'")
-            cur.execute(
-                "INSERT INTO app_meta (key, value) VALUES (%s, %s) "
-                "ON CONFLICT (key) DO NOTHING",
-                ("stage_reset_v1", "done"),
-            )
-            conn.commit()
-
         cur.execute("SELECT COUNT(*) AS c FROM companies")
         count = cur.fetchone()["c"]
         if count == 0:
@@ -324,44 +147,48 @@ def ensure_schema_and_seed():
             placeholders = ", ".join(["%s"] * len(COLUMNS))
             insert_sql = f"INSERT INTO companies ({col_names}) VALUES ({placeholders})"
             for rec in prospects:
-                row = _record_to_row(rec)
+                row = {
+                    "prospect_id": rec.get("prospect_id"),
+                    "company_name": rec.get("company_name"),
+                    "industry": rec.get("industry"),
+                    "sub_category": rec.get("sub_category"),
+                    "website": rec.get("website"),
+                    "linkedin_company": rec.get("linkedin_company"),
+                    "instagram_lookup": rec.get("instagram_lookup"),
+                    "decision_maker_name": rec.get("decision_maker_name"),
+                    "decision_maker_role": rec.get("decision_maker_role"),
+                    "decision_maker_linkedin": rec.get("decision_maker_linkedin"),
+                    "business_email": rec.get("business_email"),
+                    "business_phone": rec.get("business_phone"),
+                    "contact_confidence": rec.get("contact_confidence"),
+                    "contact_data_score": rec.get("contact_data_score"),
+                    "meta_ad_count_approx": rec.get("meta_ad_count_approx"),
+                    "meta_ad_count_bucket": rec.get("meta_ad_count_bucket"),
+                    "meta_data_confidence": rec.get("meta_data_confidence"),
+                    "most_recent_ad_start_date": rec.get("most_recent_ad_start_date"),
+                    "creative_freshness_bucket": rec.get("creative_freshness_bucket"),
+                    "discount_pct_found": rec.get("discount_pct_found"),
+                    "discount_depth_bucket": rec.get("discount_depth_bucket"),
+                    "conversion_signals_found": json.dumps(rec.get("conversion_signals_found") or []),
+                    "conversion_health_bucket": rec.get("conversion_health_bucket"),
+                    "audit_date": rec.get("audit_date"),
+                    "audit_completeness": rec.get("audit_completeness"),
+                    "audit_notes": rec.get("audit_notes"),
+                    "segment": rec.get("segment"),
+                    "segment_pain_point": rec.get("segment_pain_point"),
+                    "segment_pitch_angle": rec.get("segment_pitch_angle"),
+                    "score_breakdown": json.dumps(rec.get("score_breakdown") or {}),
+                    "opportunity_score": rec.get("opportunity_score"),
+                    "score_tier": rec.get("score_tier"),
+                    "pipeline_stage": initial_pipeline_stage(rec),
+                    "notes": "",
+                    "follow_up_date": "",
+                }
                 cur.execute(insert_sql, [row[c] for c in COLUMNS])
             conn.commit()
-        else:
-            # Table already has rows (a prior deploy seeded it). Sync in any
-            # companies present in prospect_source.json but not yet in the
-            # DB, matched by prospect_id -- this is how new batches (e.g. a
-            # follow-up list of 20 more brands) get added on redeploy
-            # without touching any existing row or pipeline stage.
-            cur.execute("SELECT prospect_id FROM companies")
-            existing_ids = {r["prospect_id"] for r in cur.fetchall()}
-            prospects = load_prospects()
-            new_records = [r for r in prospects if r.get("prospect_id") not in existing_ids]
-            if new_records:
-                col_names = ", ".join(COLUMNS)
-                placeholders = ", ".join(["%s"] * len(COLUMNS))
-                insert_sql = f"INSERT INTO companies ({col_names}) VALUES ({placeholders})"
-                for rec in new_records:
-                    row = _record_to_row(rec)
-                    cur.execute(insert_sql, [row[c] for c in COLUMNS])
-                conn.commit()
         _initialized = True
     finally:
-        release_conn(conn)
-
-
-@app.teardown_request
-def _teardown_request(exception=None):
-    # If a request raised, roll back the cached connection so it isn't left
-    # sitting in an aborted-transaction state for the next request to trip
-    # over. If rollback itself fails, drop the cache so the next request
-    # opens a clean connection.
-    global _conn_cache
-    if exception is not None and _conn_cache is not None:
-        try:
-            _conn_cache.rollback()
-        except Exception:
-            _conn_cache = None
+        conn.close()
 
 
 @app.before_request
@@ -414,7 +241,7 @@ def api_health():
                 cur.execute("SELECT COUNT(*) AS c FROM companies")
                 count = cur.fetchone()["c"]
         finally:
-            release_conn(conn)
+            conn.close()
         return jsonify({
             "status": "ok",
             "companies": count,
@@ -454,12 +281,10 @@ def api_meta():
             "audit_completeness_values": distinct("audit_completeness"),
             "creative_freshness_buckets": distinct("creative_freshness_bucket"),
             "conversion_health_buckets": distinct("conversion_health_bucket"),
-            "shopify_statuses": distinct("shopify_status"),
-            "company_sizes": distinct("company_size"),
         }
         return jsonify(result)
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 @app.route("/api/segments")
@@ -482,7 +307,7 @@ def api_segments():
             })
         return jsonify(result)
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 @app.route("/api/scoring")
@@ -501,7 +326,7 @@ def api_scoring():
             "total_companies": sum(tier_counts.values()),
         })
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -516,8 +341,6 @@ FILTERABLE = {
     "meta_ad_count_bucket": "meta_ad_count_bucket",
     "discount_depth_bucket": "discount_depth_bucket",
     "audit_completeness": "audit_completeness",
-    "shopify_status": "shopify_status",
-    "company_size": "company_size",
 }
 
 SORTABLE = {
@@ -566,7 +389,7 @@ def api_companies_list():
         companies = [row_to_dict(r) for r in rows]
         return jsonify({"companies": companies, "count": len(companies)})
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 @app.route("/api/companies/<int:company_id>", methods=["GET"])
@@ -580,14 +403,13 @@ def api_company_get(company_id):
             return jsonify({"error": "not found"}), 404
         return jsonify(row_to_dict(row))
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 EDITABLE_FIELDS = [
     "pipeline_stage", "notes", "follow_up_date", "segment",
-    "decision_maker_name", "decision_maker_role", "decision_maker_linkedin",
-    "business_email", "business_phone", "company_name", "industry",
-    "sub_category", "website",
+    "decision_maker_name", "decision_maker_role", "business_email",
+    "business_phone", "company_name", "industry", "sub_category", "website",
 ]
 
 
@@ -619,7 +441,7 @@ def api_company_update(company_id):
         row = cur.fetchone()
         return jsonify(row_to_dict(row))
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 @app.route("/api/companies/<int:company_id>", methods=["DELETE"])
@@ -635,7 +457,7 @@ def api_company_delete(company_id):
         conn.commit()
         return jsonify({"deleted": company_id})
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 @app.route("/api/companies", methods=["POST"])
@@ -680,12 +502,7 @@ def api_company_create():
             "score_breakdown": json.dumps(data.get("score_breakdown", {})),
             "opportunity_score": data.get("opportunity_score", 0),
             "score_tier": data.get("score_tier", "D"),
-            "shopify_status": data.get("shopify_status", "Uncertain"),
-            "shopify_evidence": data.get("shopify_evidence", ""),
-            "company_size": data.get("company_size", "Unknown"),
-            "company_size_confidence": data.get("company_size_confidence", ""),
-            "company_size_note": data.get("company_size_note", ""),
-            "pipeline_stage": data.get("pipeline_stage", "N/A"),
+            "pipeline_stage": data.get("pipeline_stage", "New Lead"),
             "notes": data.get("notes", ""),
             "follow_up_date": data.get("follow_up_date", ""),
         }
@@ -701,7 +518,7 @@ def api_company_create():
         new_row = cur.fetchone()
         return jsonify(row_to_dict(new_row)), 201
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -721,7 +538,7 @@ def api_company_outreach(company_id):
         draft = generate_outreach(company)
         return jsonify(draft)
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 @app.route("/api/export/csv")
@@ -743,7 +560,6 @@ def api_export_csv():
             "most_recent_ad_start_date", "discount_pct_found",
             "discount_depth_bucket", "conversion_health_bucket",
             "audit_completeness", "segment", "opportunity_score", "score_tier",
-            "shopify_status", "shopify_evidence", "company_size",
             "pipeline_stage", "follow_up_date", "notes", "audit_notes",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
@@ -757,7 +573,7 @@ def api_export_csv():
             headers={"Content-Disposition": "attachment; filename=d2c_audit_engine_export.csv"},
         )
     finally:
-        release_conn(conn)
+        conn.close()
 
 
 # Local dev entrypoint (not used by Vercel, which imports `app` directly).
